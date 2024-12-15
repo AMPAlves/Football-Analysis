@@ -6,7 +6,7 @@ key_utils.py
 **/yolov8x.pt
 models
 models/*
-
+video/*
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

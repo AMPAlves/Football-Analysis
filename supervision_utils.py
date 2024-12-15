@@ -2,7 +2,9 @@ import supervision as sv
 from ultralytics import YOLO
 import cv2
 import numpy
-from PIL import Image
+from pitch_dimension import PitchTransformation
+import numpy as np
+from pitch_dimension import SoccerPitch
 
 def frame_generator(model_path
                     ,video_frames):
@@ -74,8 +76,36 @@ def frame_generator_with_tracker(model_path
         opencvImage = cv2.cvtColor(numpy.array(annotated_frame), cv2.COLOR_RGB2BGR)
         opencvImage = opencvImage[:, :, ::-1].copy()
         output_frames.append(opencvImage)
-        
-        
+    return output_frames
+
+def frame_generator_with_radar(player_model_path,video_frames): #TODO...
     
+    VertexInfo = SoccerPitch()
+    output_frames = []
+    player_model = YOLO(player_model_path)
+    Pitch_Keypoints_Model = get_model(model_id=model_path,api_key=API_ROBOFLOW)
+     
+    byteTracker = sv.ByteTrack(track_activation_threshold=0.3, frame_rate=25)
+    
+    for frame in video_frames:
+        frame_inference = player_model.predict(frame,conf=0.25)[0] #Player Model !!
+        frame_detections = sv.Detections.from_ultralytics(frame_inference)
+        
+        ball_detections = frame_detections[frame_detections.class_id == 0]
+        
+        noBall_detections = frame_detections[frame_detections.class_id != 0]
+        noBall_detections = noBall_detections.with_nms(class_agnostic=True)
+        noBall_detections.class_id -= 1
+        noBall_detections = byteTracker.update_with_detections(detections=noBall_detections)
+    
+        pitch_frame_inference = Pitch_Keypoints_Model.infer(frame, confidence=0.5)[0]
+        pitch_frame_detections = sv.KeyPoints.from_inference(pitch_frame_inference)
+        confidence_frames = pitch_frame_detections.confidence[0] > 0.5
+        frame_detections_key_points = pitch_frame_detections.xy[0][confidence_frames]
+        frame_keypoints = sv.KeyPoints(xy=frame_detections_key_points[np.newaxis, ...])
+        pitch_keypoints_labeled = np.array(VertexInfo.vertices)[confidence_frames]
+        
+        coordinates = PitchTransformation(source=pitch_keypoints_labeled,target=frame_detections_key_points)
+        
     return output_frames
     
